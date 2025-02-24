@@ -44,9 +44,7 @@ Simply open `index.html` in your browser. No additional setup required!
 2. Create a new branch (`feature-xyz`)  
 3. Commit your changes  
 4. Open a **Pull Request**  
-
-## 📜 License  
-This project is open-source under the **MIT License**.  
+ 
 
 ## 👏 Acknowledgments  
 - **Google Teachable Machine** for model training.  
