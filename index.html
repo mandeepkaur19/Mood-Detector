@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>😊 Mood Detector 😢 with Enhanced UI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #FDB137, #FEEAA5);
+      color: #FDB137;
+      text-align: center;
+    }
+    header {
+      padding: 10px;
+      background: rgba(249, 248, 243, 1);
+    }
+    header img {
+      width: 100px;
+    }
+    h1 {
+      margin: 10px 0;
+      font-size: 2.5em;
+    }
+    /* Video Container and Overlay */
+    #video-container {
+      position: relative;
+      width: 640px;
+      height: 480px;
+      margin: 20px auto;
+      border: 5px solid #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      background: #000;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    /* Overlay that displays logo and message before starting */
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(252,207,85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    #overlay img {
+      width: 150px;
+      margin-bottom: 20px;
+    }
+    #overlay p {
+      font-size: 1.5em;
+      margin: 0;
+    }
+    /* Result and Button */
+    #result {
+      margin: 20px auto;
+      font-size: 1.8em;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .emoji {
+      font-size: 3em;
+      margin: 10px;
+    }
+    #toggleBtn {
+      padding: 15px 40px;
+      font-size: 1.2em;
+      background: #f19412;
+      border: none;
+      border-radius: 30px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s;
+      margin-bottom: 20px;
+    }
+    #toggleBtn:hover {
+      background: #C1D1D1;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mood Detector</h1>
+  </header>
+  
+  <div id="video-container">
+    <video id="video" autoplay muted></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <!-- Overlay displayed before detection starts -->
+    <div id="overlay">
+      <img src="logo.png" alt="Logo">
+    </div>
+  </div>
+  
+  <div id="result">
+    <div id="status-text">Loading model...</div>
+    <div class="emoji" id="emoji"></div>
+  </div>
+  <button id="toggleBtn">Start</button>
+  
+  <!-- Audio elements for mood sounds -->
+  <audio id="happySound" src="happy.mp3" loop preload="auto"></audio>
+  <audio id="sadSound" src="sad.mp3" loop preload="auto"></audio>
+  
+  <!-- Load TensorFlow.js first -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.9.0/dist/tf.min.js"></script>
+  <!-- Then load the Teachable Machine Image library -->
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  
+  <script>
+    // Global variables
+    let isDetecting = false;
+    let currentMood = ""; // Tracks currently playing audio
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusText = document.getElementById('status-text');
+    const emoji = document.getElementById('emoji');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const overlay = document.getElementById('overlay');
+    const happyAudio = document.getElementById('happySound');
+    const sadAudio = document.getElementById('sadSound');
+    
+    // Teachable Machine model variables
+    let model, maxPredictions;
+    const modelURL = "models/model.json";
+    const metadataURL = "models/metadata.json";
+    
+    // Load the Teachable Machine model
+    async function loadTMModel() {
+      try {
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+        statusText.textContent = "Press Start to begin";
+        console.log("Model loaded successfully with", maxPredictions, "classes.");
+      } catch (error) {
+        statusText.textContent = "Error loading model";
+        console.error("Error loading model:", error);
+      }
+    }
+    
+    // Start video stream
+    async function startVideo() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        console.log("Video stream started.");
+        return true;
+      } catch (error) {
+        statusText.textContent = "Cannot access camera";
+        console.error("Camera access error:", error);
+        return false;
+      }
+    }
+    
+    // Control audio playback based on mood
+    function updateAudio(mood) {
+      if (mood === currentMood) return;
+      // Stop and reset current audios
+      happyAudio.pause();
+      happyAudio.currentTime = 0;
+      sadAudio.pause();
+      sadAudio.currentTime = 0;
+      
+      if (mood === "happy") {
+        happyAudio.play()
+          .then(() => console.log("Playing happy audio"))
+          .catch(err => console.error("Error playing happy audio:", err));
+      } else if (mood === "sad") {
+        sadAudio.play()
+          .then(() => console.log("Playing sad audio"))
+          .catch(err => console.error("Error playing sad audio:", err));
+      }
+      currentMood = mood;
+    }
+    
+    // Detect mood using the Teachable Machine model
+    async function detectMood() {
+      if (!isDetecting) return;
+      
+      try {
+        const predictions = await model.predict(video);
+        console.log("Predictions:", predictions);
+        
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const happyPred = predictions.find(p => p.className.toLowerCase() === "happy");
+        const sadPred = predictions.find(p => p.className.toLowerCase() === "sad");
+        
+        if (happyPred) console.log("Happy probability:", happyPred.probability);
+        if (sadPred) console.log("Sad probability:", sadPred.probability);
+        
+        if (happyPred && happyPred.probability > 0.3) {
+          statusText.textContent = "You are Happy!";
+          emoji.textContent = "😊";
+          console.log("Mood detected: Happy");
+          updateAudio("happy");
+        } else if (sadPred && sadPred.probability > 0.3) {
+          statusText.textContent = "You are Sad";
+          emoji.textContent = "😢";
+          console.log("Mood detected: Sad");
+          updateAudio("sad");
+        } else {
+          statusText.textContent = "Detecting your mood...";
+          emoji.textContent = "🔍";
+          console.log("No clear mood detected.");
+          updateAudio(""); // stop audio if ambiguous
+        }
+      } catch (error) {
+        console.error("Detection error:", error);
+        statusText.textContent = "Detection error occurred";
+      }
+      
+      requestAnimationFrame(detectMood);
+    }
+    
+    // Toggle button handler
+    toggleBtn.addEventListener('click', async () => {
+      if (!isDetecting) {
+        const success = await startVideo();
+        if (success) {
+          isDetecting = true;
+          toggleBtn.textContent = "Stop";
+          toggleBtn.style.background = "#f44336";
+          statusText.textContent = "Detecting your mood...";
+          // Hide the overlay when starting
+          overlay.style.display = "none";
+          console.log("Starting mood detection.");
+          detectMood();
+        }
+      } else {
+        isDetecting = false;
+        toggleBtn.textContent = "Start";
+        toggleBtn.style.background = "#ff7f50";
+        statusText.textContent = "Press Start to begin";
+        emoji.textContent = "";
+        console.log("Stopping mood detection.");
+        updateAudio(""); // Stop any audio
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        }
+        // Show overlay when stopped
+        overlay.style.display = "flex";
+      }
+    });
+    
+    window.addEventListener("load", loadTMModel);
+  </script>
+</body>
+</html>
